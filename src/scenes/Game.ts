@@ -9,6 +9,8 @@ export default class Demo extends Phaser.Scene {
   init() {
     this.playerSpeed = 150;
     this.jumpSpeed = -600;
+    this.maxJumps = 2;
+    this.jumpsRemaining = this.maxJumps;
   }
 
   preload() {
@@ -240,11 +242,18 @@ export default class Demo extends Phaser.Scene {
       // set default frame
       if (onGround) this.player.setFrame(3);
     }
+    // handle jumping (feature: double-jump)
+    if (onGround) {
+      this.jumpsRemaining = this.maxJumps;
+    }
 
-    // handle jumping
-    if (onGround && (this.cursors.space.isDown || this.cursors.up.isDown)) {
-      // give the player a velocity in Y
+    const jumpPressed =
+      Phaser.Input.Keyboard.JustDown(this.cursors.space) ||
+      Phaser.Input.Keyboard.JustDown(this.cursors.up);
+
+    if (jumpPressed && this.jumpsRemaining > 0) {
       this.player.body.setVelocityY(this.jumpSpeed);
+      this.jumpsRemaining -= 1;
 
       // stop the walking animation
       this.player.anims.stop('walking');
