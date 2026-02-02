@@ -81,6 +81,15 @@ export default class Demo extends Phaser.Scene {
     // constrain player to the game bounds
     this.player.body.setCollideWorldBounds(true);
 
+    // camera: follow player across the level (world is larger than viewport)
+    this.cameras.main.setBounds(
+      0,
+      0,
+      this.physics.world.bounds.width,
+      this.physics.world.bounds.height
+    );
+    this.cameras.main.startFollow(this.player, true, 0.12, 0.12);
+
     // goal
     this.goal = this.add.sprite(
       this.levelData.goal.x,
