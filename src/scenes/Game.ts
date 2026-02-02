@@ -11,6 +11,9 @@ export default class Demo extends Phaser.Scene {
     this.jumpSpeed = -600;
     this.maxJumps = 2;
     this.jumpsRemaining = this.maxJumps;
+
+    // guard against multiple overlap callbacks triggering multiple restarts
+    this.isRestarting = false;
   }
 
   preload() {
@@ -103,11 +106,14 @@ export default class Demo extends Phaser.Scene {
   }
 
   restartGame(sourceSprite, targetSprite) {
+    if (this.isRestarting) return;
+    this.isRestarting = true;
+
     // fade out
     this.cameras.main.fade(500);
 
     // when fade out completes, restart scene
-    this.cameras.main.on(
+    this.cameras.main.once(
       'camerafadeoutcomplete',
       function (camera, effect) {
         // restart the scene
