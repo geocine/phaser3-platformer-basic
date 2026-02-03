@@ -7,3 +7,8 @@ new Phaser.Game(
     scene: [GameScene]
   })
 );
+// Keep the game canvas in sync with the browser size
+window.addEventListener("resize", () => {
+  game.scale.resize(window.innerWidth, window.innerHeight);
+});
+

@@ -1,0 +1,6 @@
+Repo=geocine/phaser3-platformer-basic Dir=/opt/openclaw/.openclaw/workspace/phaser-pr-bot-work/phaser3-platformer-basic Base=master
+Tracked files: 21
+vite.config.ts:11:  'typeof WEBGL_DEBUG': JSON.stringify(false),
+PATCHED src/index.ts
+ src/index.ts | 5 +++++
+ 1 file changed, 5 insertions(+)
