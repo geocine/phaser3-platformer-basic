@@ -2,13 +2,16 @@ import Phaser from 'phaser';
 import config from './config';
 import GameScene from './scenes/Game';
 
-new Phaser.Game(
+const game = new Phaser.Game(
   Object.assign(config, {
     scene: [GameScene]
   })
 );
-// Keep the game canvas in sync with the browser size
-window.addEventListener("resize", () => {
-  game.scale.resize(window.innerWidth, window.innerHeight);
+
+// Resize behavior note:
+// With FIT + CENTER_BOTH we keep the internal resolution fixed and only re-fit the canvas.
+// Do NOT call game.scale.resize(...) here unless you intentionally switch to RESIZE mode.
+window.addEventListener('resize', () => {
+  game.scale.refresh();
 });
 
