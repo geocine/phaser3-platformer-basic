@@ -41,6 +41,46 @@ export default class Demo extends Phaser.Scene {
     this.levelData = this.cache.json.get('levelData');
     this.cursors = this.input.keyboard.createCursorKeys();
 
+    // extra keys (in addition to cursor keys)
+    this.keys = this.input.keyboard.addKeys({
+      restart: 'R',
+      pause: 'P'
+    });
+
+    // lightweight HUD (camera-fixed)
+    this.isPaused = false;
+    this.hudText = this.add
+      .text(8, 0, '', {
+        fontFamily: 'monospace',
+        fontSize: '14px',
+        color: '#ffffff',
+        stroke: '#000000',
+        strokeThickness: 3
+      })
+      .setScrollFactor(0)
+      .setDepth(1000)
+      .setOrigin(0, 1);
+
+    // keep HUD near bottom-left so it doesn't cover upward gameplay
+    this.hudText.setPosition(8, this.scale.height - 8);
+    this.scale.on('resize', (gameSize) => {
+      this.hudText.setPosition(8, gameSize.height - 8);
+    });
+
+    this.pauseText = this.add
+      .text(180, 320, 'PAUSED\nPress P to resume', {
+        fontFamily: 'monospace',
+        fontSize: '20px',
+        color: '#ffffff',
+        stroke: '#000000',
+        strokeThickness: 4,
+        align: 'center'
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(1001)
+      .setVisible(false);
+
     // world bounds
     this.physics.world.bounds.width = this.levelData.world.width;
     this.physics.world.bounds.height = this.levelData.world.height;
@@ -223,6 +263,23 @@ export default class Demo extends Phaser.Scene {
   }
 
   update() {
+    if (Phaser.Input.Keyboard.JustDown(this.keys.restart)) {
+      this.scene.restart();
+      return;
+    }
+
+    if (Phaser.Input.Keyboard.JustDown(this.keys.pause)) {
+      this.isPaused = !this.isPaused;
+      this.physics.world.isPaused = this.isPaused;
+      this.time.timeScale = this.isPaused ? 0 : 1;
+      this.pauseText.setVisible(this.isPaused);
+
+      if (this.isPaused) this.anims.pauseAll();
+      else this.anims.resumeAll();
+    }
+
+    if (this.isPaused) return;
+
     // are we on the ground?
     let onGround =
       this.player.body.blocked.down || this.player.body.touching.down;
@@ -276,5 +333,8 @@ export default class Demo extends Phaser.Scene {
       // change frame
       this.player.setFrame(2);
     }
+
+    // HUD: quick controls
+    this.hudText.setText('R: Restart   P: Pause');
   }
 }
