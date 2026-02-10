@@ -63,23 +63,31 @@ export default class Demo extends Phaser.Scene {
 
     // keep HUD near bottom-left so it doesn't cover upward gameplay
     this.hudText.setPosition(8, this.scale.height - 8);
-    this.scale.on('resize', (gameSize) => {
-      this.hudText.setPosition(8, gameSize.height - 8);
-    });
 
     this.pauseText = this.add
-      .text(180, 320, 'PAUSED\nPress P to resume', {
-        fontFamily: 'monospace',
-        fontSize: '20px',
-        color: '#ffffff',
-        stroke: '#000000',
-        strokeThickness: 4,
-        align: 'center'
-      })
+      .text(
+        this.scale.width * 0.5,
+        this.scale.height * 0.5,
+        'PAUSED\nPress P to resume',
+        {
+          fontFamily: 'monospace',
+          fontSize: '20px',
+          color: '#ffffff',
+          stroke: '#000000',
+          strokeThickness: 4,
+          align: 'center'
+        }
+      )
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(1001)
       .setVisible(false);
+
+    // keep UI elements positioned correctly on resize
+    this.scale.on('resize', (gameSize) => {
+      this.hudText.setPosition(8, gameSize.height - 8);
+      this.pauseText.setPosition(gameSize.width * 0.5, gameSize.height * 0.5);
+    });
 
     // world bounds
     this.physics.world.bounds.width = this.levelData.world.width;
@@ -334,7 +342,8 @@ export default class Demo extends Phaser.Scene {
       this.player.setFrame(2);
     }
 
-    // HUD: quick controls
-    this.hudText.setText('R: Restart   P: Pause');
+    // HUD: quick controls (avoid spamming setText every frame)
+    const hud = `R: Restart   P: Pause`;
+    if (hud !== this.hudText.text) this.hudText.setText(hud);
   }
 }
