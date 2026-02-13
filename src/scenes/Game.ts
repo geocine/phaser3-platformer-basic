@@ -9,8 +9,17 @@ export default class Demo extends Phaser.Scene {
   init() {
     this.playerSpeed = 150;
     this.jumpSpeed = -600;
+
+    // jumping
     this.maxJumps = 2;
     this.jumpsRemaining = this.maxJumps;
+
+    // feel: allow jumping shortly after leaving a ledge ("coyote time") and
+    // shortly before landing ("jump buffer")
+    this.coyoteTimeMs = 120;
+    this.jumpBufferMs = 120;
+    this.coyoteTimerMs = 0;
+    this.jumpBufferTimerMs = 0;
 
     // guard against multiple overlap callbacks triggering multiple restarts
     this.isRestarting = false;
@@ -270,7 +279,7 @@ export default class Demo extends Phaser.Scene {
     });
   }
 
-  update() {
+  update(time, delta) {
     if (Phaser.Input.Keyboard.JustDown(this.keys.restart)) {
       this.scene.restart();
       return;
@@ -289,8 +298,16 @@ export default class Demo extends Phaser.Scene {
     if (this.isPaused) return;
 
     // are we on the ground?
-    let onGround =
+    const onGround =
       this.player.body.blocked.down || this.player.body.touching.down;
+
+    // feel timers
+    if (onGround) {
+      this.coyoteTimerMs = this.coyoteTimeMs;
+      this.jumpsRemaining = this.maxJumps;
+    } else {
+      this.coyoteTimerMs = Math.max(0, this.coyoteTimerMs - delta);
+    }
 
     // movement to the left
     if (this.cursors.left.isDown && !this.cursors.right.isDown) {
@@ -322,18 +339,26 @@ export default class Demo extends Phaser.Scene {
       // set default frame
       if (onGround) this.player.setFrame(3);
     }
-    // handle jumping (feature: double-jump)
-    if (onGround) {
-      this.jumpsRemaining = this.maxJumps;
-    }
 
     const jumpPressed =
       Phaser.Input.Keyboard.JustDown(this.cursors.space) ||
       Phaser.Input.Keyboard.JustDown(this.cursors.up);
 
-    if (jumpPressed && this.jumpsRemaining > 0) {
+    if (jumpPressed) {
+      this.jumpBufferTimerMs = this.jumpBufferMs;
+    } else {
+      this.jumpBufferTimerMs = Math.max(0, this.jumpBufferTimerMs - delta);
+    }
+
+    const canGroundJump = onGround || this.coyoteTimerMs > 0;
+
+    // jump buffer + coyote time: if you pressed jump slightly early/late,
+    // still allow the jump when conditions become valid.
+    if (this.jumpBufferTimerMs > 0 && canGroundJump && this.jumpsRemaining > 0) {
       this.player.body.setVelocityY(this.jumpSpeed);
       this.jumpsRemaining -= 1;
+      this.coyoteTimerMs = 0;
+      this.jumpBufferTimerMs = 0;
 
       // stop the walking animation
       this.player.anims.stop('walking');
