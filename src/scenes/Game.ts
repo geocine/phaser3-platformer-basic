@@ -21,6 +21,13 @@ export default class Demo extends Phaser.Scene {
     this.coyoteTimerMs = 0;
     this.jumpBufferTimerMs = 0;
 
+    // mobile controls (touch only)
+    this.mobile = {
+      enabled: false,
+      stick: { active: false, pointerId: null, centerX: 0, centerY: 0, radius: 46, x: 0, y: 0 },
+      jumpQueued: false
+    };
+
     // guard against multiple overlap callbacks triggering multiple restarts
     this.isRestarting = false;
   }
@@ -72,6 +79,115 @@ export default class Demo extends Phaser.Scene {
 
     // keep HUD near bottom-left so it doesn't cover upward gameplay
     this.hudText.setPosition(8, this.scale.height - 8);
+
+    // show a quick controls hint, then fade it out
+    this.hudText.setText('Arrows: Move   Space/Up: Jump   R: Restart   P: Pause');
+    this.tweens.add({
+      targets: this.hudText,
+      alpha: 0,
+      duration: 900,
+      delay: 4500,
+      ease: 'Sine.easeInOut'
+    });
+
+    // mobile controls: virtual joystick + tap jump (touch devices only)
+    this.mobile.enabled = !!this.sys.game.device.input.touch;
+    if (this.mobile.enabled) {
+      const placeMobileUi = (w, h) => {
+        const stickX = 90;
+        const stickY = h - 90;
+        const jumpX = w - 90;
+        const jumpY = h - 90;
+
+        this.mobileStickBase.setPosition(stickX, stickY);
+        this.mobileStickKnob.setPosition(stickX + this.mobile.stick.x * this.mobile.stick.radius, stickY + this.mobile.stick.y * this.mobile.stick.radius);
+        this.mobileJumpBtn.setPosition(jumpX, jumpY);
+        this.mobileJumpLabel.setPosition(jumpX, jumpY);
+      };
+
+      this.mobile.stick.radius = 46;
+
+      this.mobileStickBase = this.add
+        .circle(0, 0, this.mobile.stick.radius, 0x000000, 0.25)
+        .setScrollFactor(0)
+        .setDepth(1002)
+        .setInteractive({ useHandCursor: false });
+
+      this.mobileStickKnob = this.add
+        .circle(0, 0, 20, 0xffffff, 0.35)
+        .setScrollFactor(0)
+        .setDepth(1003);
+
+      this.mobileJumpBtn = this.add
+        .circle(0, 0, 34, 0x000000, 0.25)
+        .setScrollFactor(0)
+        .setDepth(1002)
+        .setInteractive({ useHandCursor: false });
+
+      this.mobileJumpLabel = this.add
+        .text(0, 0, 'J', {
+          fontFamily: 'monospace',
+          fontSize: '18px',
+          color: '#ffffff',
+          stroke: '#000000',
+          strokeThickness: 4
+        })
+        .setOrigin(0.5)
+        .setScrollFactor(0)
+        .setDepth(1004);
+
+      placeMobileUi(this.scale.width, this.scale.height);
+
+      // keep mobile UI positioned correctly on resize
+      this.scale.on('resize', (gameSize) => {
+        placeMobileUi(gameSize.width, gameSize.height);
+      });
+
+      const setStickVectorFromPointer = (pointer) => {
+        const dx = pointer.x - this.mobile.stick.centerX;
+        const dy = pointer.y - this.mobile.stick.centerY;
+        const len = Math.sqrt(dx * dx + dy * dy) || 1;
+        const clamped = Math.min(this.mobile.stick.radius, len);
+        this.mobile.stick.x = (dx / len) * (clamped / this.mobile.stick.radius);
+        this.mobile.stick.y = (dy / len) * (clamped / this.mobile.stick.radius);
+      };
+
+      const resetStick = () => {
+        this.mobile.stick.active = false;
+        this.mobile.stick.pointerId = null;
+        this.mobile.stick.x = 0;
+        this.mobile.stick.y = 0;
+      };
+
+      // joystick interaction
+      this.mobileStickBase.on('pointerdown', (pointer) => {
+        this.mobile.stick.active = true;
+        this.mobile.stick.pointerId = pointer.id;
+        this.mobile.stick.centerX = this.mobileStickBase.x;
+        this.mobile.stick.centerY = this.mobileStickBase.y;
+        setStickVectorFromPointer(pointer);
+      });
+
+      this.input.on('pointermove', (pointer) => {
+        if (!this.mobile.stick.active) return;
+        if (this.mobile.stick.pointerId !== pointer.id) return;
+        setStickVectorFromPointer(pointer);
+      });
+
+      this.input.on('pointerup', (pointer) => {
+        if (this.mobile.stick.pointerId === pointer.id) resetStick();
+      });
+
+      this.input.on('pointerupoutside', (pointer) => {
+        if (this.mobile.stick.pointerId === pointer.id) resetStick();
+      });
+
+      // jump: tap once -> queue a buffered jump
+      this.mobileJumpBtn.on('pointerdown', () => {
+        this.mobile.jumpQueued = true;
+        this.tweens.add({ targets: this.mobileJumpBtn, scale: 0.92, yoyo: true, duration: 80 });
+      });
+    }
 
     this.pauseText = this.add
       .text(
@@ -309,8 +425,12 @@ export default class Demo extends Phaser.Scene {
       this.coyoteTimerMs = Math.max(0, this.coyoteTimerMs - delta);
     }
 
+    const stickX = this.mobile.enabled ? this.mobile.stick.x : 0;
+    const moveLeft = this.cursors.left.isDown || stickX < -0.25;
+    const moveRight = this.cursors.right.isDown || stickX > 0.25;
+
     // movement to the left
-    if (this.cursors.left.isDown && !this.cursors.right.isDown) {
+    if (moveLeft && !moveRight) {
       this.player.body.setVelocityX(-this.playerSpeed);
 
       this.player.flipX = false;
@@ -321,7 +441,7 @@ export default class Demo extends Phaser.Scene {
     }
 
     // movement to the right
-    else if (this.cursors.right.isDown && !this.cursors.left.isDown) {
+    else if (moveRight && !moveLeft) {
       this.player.body.setVelocityX(this.playerSpeed);
 
       this.player.flipX = true;
@@ -329,7 +449,7 @@ export default class Demo extends Phaser.Scene {
       // play animation if none is playing
       if (onGround && !this.player.anims.isPlaying)
         this.player.anims.play('walking');
-    } else if (!this.cursors.left.isDown && !this.cursors.right.isDown) {
+    } else if (!moveLeft && !moveRight) {
       // make the player stop
       this.player.body.setVelocityX(0);
 
@@ -338,6 +458,11 @@ export default class Demo extends Phaser.Scene {
 
       // set default frame
       if (onGround) this.player.setFrame(3);
+    }
+
+    if (this.mobile.enabled && this.mobile.jumpQueued) {
+      this.jumpBufferTimerMs = this.jumpBufferMs;
+      this.mobile.jumpQueued = false;
     }
 
     const jumpPressed =
@@ -367,8 +492,6 @@ export default class Demo extends Phaser.Scene {
       this.player.setFrame(2);
     }
 
-    // HUD: quick controls (avoid spamming setText every frame)
-    const hud = `R: Restart   P: Pause`;
-    if (hud !== this.hudText.text) this.hudText.setText(hud);
+    // HUD is a one-time controls hint (it fades out), so nothing to update here.
   }
 }
