@@ -205,11 +205,22 @@ export default class Demo extends Phaser.Scene {
       });
     }
 
+    // pause handling (shared by keyboard + mobile button)
+    this.togglePause = () => {
+      this.isPaused = !this.isPaused;
+      this.physics.world.isPaused = this.isPaused;
+      this.time.timeScale = this.isPaused ? 0 : 1;
+      this.pauseText.setVisible(this.isPaused);
+
+      if (this.isPaused) this.anims.pauseAll();
+      else this.anims.resumeAll();
+    };
+
     this.pauseText = this.add
       .text(
         this.scale.width * 0.5,
         this.scale.height * 0.5,
-        'PAUSED\nPress P to resume',
+        isTouch ? 'PAUSED\nTap ⏸ to resume' : 'PAUSED\nPress P to resume',
         {
           fontFamily: 'monospace',
           fontSize: '20px',
@@ -224,11 +235,35 @@ export default class Demo extends Phaser.Scene {
       .setDepth(1001)
       .setVisible(false);
 
+    // mobile pause button (touch devices only)
+    if (isTouch) {
+      this.mobilePauseBtn = this.add
+        .text(this.scale.width - 12, 10, '⏸', {
+          fontFamily: 'monospace',
+          fontSize: '22px',
+          color: '#ffffff',
+          stroke: '#000000',
+          strokeThickness: 4
+        })
+        .setOrigin(1, 0)
+        .setScrollFactor(0)
+        .setDepth(1004)
+        .setInteractive({ useHandCursor: true });
+
+      this.mobilePauseBtn.on('pointerdown', () => {
+        this.togglePause();
+      });
+    }
+
     // keep UI elements positioned correctly on resize
     this.scale.on('resize', (gameSize) => {
       this.hudText.setPosition(8, gameSize.height - 24);
       this.hudText.setWordWrapWidth(gameSize.width - 16, true);
       this.pauseText.setPosition(gameSize.width * 0.5, gameSize.height * 0.5);
+
+      if (this.mobilePauseBtn) {
+        this.mobilePauseBtn.setPosition(gameSize.width - 12, 10);
+      }
     });
 
     // world bounds
@@ -419,13 +454,7 @@ export default class Demo extends Phaser.Scene {
     }
 
     if (Phaser.Input.Keyboard.JustDown(this.keys.pause)) {
-      this.isPaused = !this.isPaused;
-      this.physics.world.isPaused = this.isPaused;
-      this.time.timeScale = this.isPaused ? 0 : 1;
-      this.pauseText.setVisible(this.isPaused);
-
-      if (this.isPaused) this.anims.pauseAll();
-      else this.anims.resumeAll();
+      this.togglePause();
     }
 
     if (this.isPaused) return;
