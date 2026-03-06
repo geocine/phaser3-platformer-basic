@@ -235,6 +235,15 @@ export default class Demo extends Phaser.Scene {
       .setDepth(1001)
       .setVisible(false);
 
+    // auto-pause when the tab/app loses focus so you don't die to offscreen hazards
+    this.handleBlur = () => {
+      if (!this.isPaused) this.togglePause();
+    };
+    this.game.events.on(Phaser.Core.Events.BLUR, this.handleBlur);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.game.events.off(Phaser.Core.Events.BLUR, this.handleBlur);
+    });
+
     // mobile pause button (touch devices only)
     if (isTouch) {
       this.mobilePauseBtn = this.add
