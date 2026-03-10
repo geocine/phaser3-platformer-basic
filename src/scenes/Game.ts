@@ -62,7 +62,10 @@ export default class Demo extends Phaser.Scene {
     // extra keys (in addition to cursor keys)
     this.keys = this.input.keyboard.addKeys({
       restart: 'R',
-      pause: 'P'
+      pause: 'P',
+      left: 'A',
+      right: 'D',
+      jump: 'W'
     });
 
     // lightweight HUD (camera-fixed)
@@ -86,7 +89,7 @@ export default class Demo extends Phaser.Scene {
     if (!isTouch) {
       // wrap so the right-hand legend never gets cut off on narrow screens
       this.hudText.setWordWrapWidth(this.scale.width - 16, true);
-      this.hudText.setText('←/→ move   ↑/Space jump\nR restart   P pause');
+      this.hudText.setText('←/→ or A/D move   ↑/Space/W jump\nR restart   P pause');
 
       this.tweens.add({
         targets: this.hudText,
@@ -487,8 +490,11 @@ export default class Demo extends Phaser.Scene {
     const moveLeft = this.cursors.left.isDown || stickAxis < 0;
     const moveRight = this.cursors.right.isDown || stickAxis > 0;
 
+    const moveLeftKey = !this.mobile.enabled && this.keys.left.isDown;
+    const moveRightKey = !this.mobile.enabled && this.keys.right.isDown;
+
     // movement to the left
-    if (moveLeft && !moveRight) {
+    if ((moveLeft || moveLeftKey) && !(moveRight || moveRightKey)) {
       this.player.body.setVelocityX(stickAxis !== 0 ? stickAxis * this.playerSpeed * mobileSpeed : -this.playerSpeed);
 
       this.player.flipX = false;
@@ -499,7 +505,7 @@ export default class Demo extends Phaser.Scene {
     }
 
     // movement to the right
-    else if (moveRight && !moveLeft) {
+    else if ((moveRight || moveRightKey) && !(moveLeft || moveLeftKey)) {
       this.player.body.setVelocityX(stickAxis !== 0 ? stickAxis * this.playerSpeed * mobileSpeed : this.playerSpeed);
 
       this.player.flipX = true;
@@ -507,7 +513,7 @@ export default class Demo extends Phaser.Scene {
       // play animation if none is playing
       if (onGround && !this.player.anims.isPlaying)
         this.player.anims.play('walking');
-    } else if (!moveLeft && !moveRight) {
+    } else if (!(moveLeft || moveLeftKey) && !(moveRight || moveRightKey)) {
       // make the player stop
       this.player.body.setVelocityX(0);
 
@@ -524,7 +530,8 @@ export default class Demo extends Phaser.Scene {
     const jumpPressed =
       mobileJumpPressed ||
       Phaser.Input.Keyboard.JustDown(this.cursors.space) ||
-      Phaser.Input.Keyboard.JustDown(this.cursors.up);
+      Phaser.Input.Keyboard.JustDown(this.cursors.up) ||
+      (!this.mobile.enabled && Phaser.Input.Keyboard.JustDown(this.keys.jump));
 
     if (jumpPressed) {
       this.jumpBufferTimerMs = this.jumpBufferMs;
