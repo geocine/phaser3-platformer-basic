@@ -9,6 +9,8 @@ export default class Demo extends Phaser.Scene {
   init() {
     this.playerSpeed = 150;
     this.jumpSpeed = -600;
+    this.jumpHoldBoost = 26;
+    this.jumpHoldWindowMs = 110;
 
     // jumping
     this.maxJumps = 2;
@@ -20,12 +22,15 @@ export default class Demo extends Phaser.Scene {
     this.jumpBufferMs = 120;
     this.coyoteTimerMs = 0;
     this.jumpBufferTimerMs = 0;
+    this.jumpHoldTimerMs = 0;
 
     // mobile controls (touch only)
     this.mobile = {
       enabled: false,
       stick: { active: false, pointerId: null, centerX: 0, centerY: 0, radius: 46, x: 0, y: 0 },
-      jumpQueued: false
+      jumpQueued: false,
+      jumpHeld: false,
+      jumpPointerId: null
     };
 
     // guard against multiple overlap callbacks triggering multiple restarts
@@ -140,13 +145,23 @@ export default class Demo extends Phaser.Scene {
       // (no label on mobile jump button)
 
       // feedback: pressed / released
-      this.mobileJumpBtn.on('pointerdown', () => {
+      this.mobileJumpBtn.on('pointerdown', (pointer) => {
+        this.mobile.jumpHeld = true;
+        this.mobile.jumpPointerId = pointer.id;
         this.mobileJumpBtn.setFillStyle(0x66ccff, 0.28);
       });
-      this.mobileJumpBtn.on('pointerup', () => {
+      this.mobileJumpBtn.on('pointerup', (pointer) => {
+        if (this.mobile.jumpPointerId === pointer.id) {
+          this.mobile.jumpHeld = false;
+          this.mobile.jumpPointerId = null;
+        }
         this.mobileJumpBtn.setFillStyle(0x000000, 0.20);
       });
-      this.mobileJumpBtn.on('pointerout', () => {
+      this.mobileJumpBtn.on('pointerout', (pointer) => {
+        if (this.mobile.jumpPointerId === pointer.id) {
+          this.mobile.jumpHeld = false;
+          this.mobile.jumpPointerId = null;
+        }
         this.mobileJumpBtn.setFillStyle(0x000000, 0.20);
       });
 
@@ -199,6 +214,10 @@ export default class Demo extends Phaser.Scene {
 
       this.input.on('pointerup', (pointer) => {
         if (this.mobile.stick.pointerId === pointer.id) resetStick();
+        if (this.mobile.jumpPointerId === pointer.id) {
+          this.mobile.jumpHeld = false;
+          this.mobile.jumpPointerId = null;
+        }
       });
 
       // jump: tap once -> queue a buffered jump
@@ -369,6 +388,20 @@ export default class Demo extends Phaser.Scene {
     );
   }
 
+  performJump() {
+    this.player.body.setVelocityY(this.jumpSpeed);
+    this.jumpsRemaining -= 1;
+    this.coyoteTimerMs = 0;
+    this.jumpBufferTimerMs = 0;
+    this.jumpHoldTimerMs = this.jumpHoldWindowMs;
+
+    // stop the walking animation
+    this.player.anims.stop('walking');
+
+    // change frame
+    this.player.setFrame(2);
+  }
+
   setupLevel() {
     this.platforms = this.add.group();
 
@@ -479,6 +512,7 @@ export default class Demo extends Phaser.Scene {
     if (onGround) {
       this.coyoteTimerMs = this.coyoteTimeMs;
       this.jumpsRemaining = this.maxJumps;
+      this.jumpHoldTimerMs = 0;
     } else {
       this.coyoteTimerMs = Math.max(0, this.coyoteTimerMs - delta);
     }
@@ -532,6 +566,11 @@ export default class Demo extends Phaser.Scene {
       Phaser.Input.Keyboard.JustDown(this.cursors.space) ||
       Phaser.Input.Keyboard.JustDown(this.cursors.up) ||
       (!this.mobile.enabled && Phaser.Input.Keyboard.JustDown(this.keys.jump));
+    const jumpHeld =
+      (this.mobile.enabled && this.mobile.jumpHeld) ||
+      this.cursors.space.isDown ||
+      this.cursors.up.isDown ||
+      (!this.mobile.enabled && this.keys.jump.isDown);
 
     if (jumpPressed) {
       this.jumpBufferTimerMs = this.jumpBufferMs;
@@ -544,16 +583,22 @@ export default class Demo extends Phaser.Scene {
     // jump buffer + coyote time: if you pressed jump slightly early/late,
     // still allow the jump when conditions become valid.
     if (this.jumpBufferTimerMs > 0 && canGroundJump && this.jumpsRemaining > 0) {
-      this.player.body.setVelocityY(this.jumpSpeed);
-      this.jumpsRemaining -= 1;
-      this.coyoteTimerMs = 0;
-      this.jumpBufferTimerMs = 0;
+      this.performJump();
+    } else if (jumpPressed && !canGroundJump && this.jumpsRemaining > 0) {
+      this.performJump();
+    }
 
-      // stop the walking animation
-      this.player.anims.stop('walking');
-
-      // change frame
-      this.player.setFrame(2);
+    if (this.jumpHoldTimerMs > 0) {
+      if (!jumpHeld) {
+        this.jumpHoldTimerMs = 0;
+      } else if (!this.player.body.blocked.up && this.player.body.velocity.y < 0) {
+        this.player.body.setVelocityY(
+          this.player.body.velocity.y - this.jumpHoldBoost * (delta / (1000 / 60))
+        );
+        this.jumpHoldTimerMs = Math.max(0, this.jumpHoldTimerMs - delta);
+      } else {
+        this.jumpHoldTimerMs = 0;
+      }
     }
 
     // HUD is a one-time controls hint (it fades out), so nothing to update here.
