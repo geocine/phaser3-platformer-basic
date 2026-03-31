@@ -443,6 +443,10 @@ export default class Demo extends Phaser.Scene {
       newObj.anims.play('burning');
       // add to the group
       this.fires.add(newObj);
+
+      // Keep the danger close to the visible flame so edge grazes feel fair.
+      newObj.body.setSize(12, 12);
+      newObj.body.setOffset(4, 8);
     }
   }
 
