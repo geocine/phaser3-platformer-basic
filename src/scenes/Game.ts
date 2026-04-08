@@ -35,6 +35,8 @@ export default class Demo extends Phaser.Scene {
 
     // guard against multiple overlap callbacks triggering multiple restarts
     this.isRestarting = false;
+    this.hasWon = false;
+    this.barrelSpawnEvent = null;
   }
 
   preload() {
@@ -257,9 +259,28 @@ export default class Demo extends Phaser.Scene {
       .setDepth(1001)
       .setVisible(false);
 
+    this.winText = this.add
+      .text(
+        this.scale.width * 0.5,
+        this.scale.height * 0.5,
+        isTouch ? 'YOU WIN!\nTap to restart' : 'YOU WIN!\nPress R to restart',
+        {
+          fontFamily: 'monospace',
+          fontSize: '20px',
+          color: '#ffffff',
+          stroke: '#000000',
+          strokeThickness: 4,
+          align: 'center'
+        }
+      )
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(1001)
+      .setVisible(false);
+
     // auto-pause when the tab/app loses focus so you don't die to offscreen hazards
     this.handleBlur = () => {
-      if (!this.isPaused) this.togglePause();
+      if (!this.isPaused && !this.hasWon) this.togglePause();
     };
     this.game.events.on(Phaser.Core.Events.BLUR, this.handleBlur);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -291,6 +312,7 @@ export default class Demo extends Phaser.Scene {
       this.hudText.setPosition(8, gameSize.height - 24);
       this.hudText.setWordWrapWidth(gameSize.width - 16, true);
       this.pauseText.setPosition(gameSize.width * 0.5, gameSize.height * 0.5);
+      this.winText.setPosition(gameSize.width * 0.5, gameSize.height * 0.5);
 
       if (this.mobilePauseBtn) {
         this.mobilePauseBtn.setPosition(gameSize.width - 12, 10);
@@ -363,15 +385,16 @@ export default class Demo extends Phaser.Scene {
     // overlap checks
     this.physics.add.overlap(
       this.player,
-      [this.fires, this.goal, this.barrels],
+      [this.fires, this.barrels],
       this.restartGame,
       null,
       this
     );
+    this.physics.add.overlap(this.player, this.goal, this.handleGoalReached, null, this);
   }
 
   restartGame(sourceSprite, targetSprite) {
-    if (this.isRestarting) return;
+    if (this.isRestarting || this.hasWon) return;
     this.isRestarting = true;
 
     // fade out
@@ -386,6 +409,46 @@ export default class Demo extends Phaser.Scene {
       },
       this
     );
+  }
+
+  handleGoalReached() {
+    if (this.isRestarting || this.hasWon) return;
+
+    this.hasWon = true;
+
+    if (this.barrelSpawnEvent) {
+      this.barrelSpawnEvent.remove(false);
+      this.barrelSpawnEvent = null;
+    }
+
+    this.player.body.setVelocity(0);
+    this.player.anims.stop();
+    this.goal.body.enable = false;
+    this.mobile.jumpHeld = false;
+    this.mobile.jumpQueued = false;
+    this.mobile.jumpPointerId = null;
+    this.mobile.stick.active = false;
+    this.mobile.stick.pointerId = null;
+    this.mobile.stick.x = 0;
+    this.mobile.stick.y = 0;
+
+    this.physics.world.pause();
+    this.anims.pauseAll();
+    this.pauseText.setVisible(false);
+    this.winText.setVisible(true);
+
+    if (this.mobile.enabled) {
+      this.mobileStickBase.setFillStyle(0x000000, 0.18);
+      this.mobileStickKnob.setPosition(this.mobileStickBase.x, this.mobileStickBase.y);
+      this.mobileJumpBtn.setFillStyle(0x000000, 0.20);
+      if (this.mobilePauseBtn) {
+        this.mobilePauseBtn.disableInteractive().setVisible(false);
+      }
+
+      this.input.once('pointerdown', () => {
+        this.scene.restart();
+      });
+    }
   }
 
   performJump() {
@@ -460,6 +523,8 @@ export default class Demo extends Phaser.Scene {
     });
 
     const createBarrels = () => {
+      if (this.hasWon) return;
+
       // create a barrel
       let barrel = this.barrels.get(this.goal.x, this.goal.y, 'barrel');
 
@@ -482,7 +547,7 @@ export default class Demo extends Phaser.Scene {
         }
       });
 
-      spawnEvent.reset({
+      this.barrelSpawnEvent.reset({
         delay: Phaser.Math.Between(100, 5000),
         repeat: 1,
         callback: createBarrels
@@ -490,7 +555,7 @@ export default class Demo extends Phaser.Scene {
     };
 
     // spawn barrels
-    const spawnEvent = this.time.addEvent({
+    this.barrelSpawnEvent = this.time.addEvent({
       delay: Phaser.Math.Between(100, 5000),
       callback: createBarrels
     });
@@ -501,6 +566,8 @@ export default class Demo extends Phaser.Scene {
       this.scene.restart();
       return;
     }
+
+    if (this.hasWon) return;
 
     if (Phaser.Input.Keyboard.JustDown(this.keys.pause)) {
       this.togglePause();
