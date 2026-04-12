@@ -459,6 +459,18 @@ export default class Demo extends Phaser.Scene {
       collideWorldBounds: true
     });
 
+    // Keep spawns centered on the level-configured interval, with small jitter
+    // so hazards stay readable without feeling perfectly metronomic.
+    const getNextSpawnDelay = () => {
+      const baseInterval = this.levelData.spawner.interval;
+      const jitter = Math.max(100, Math.round(baseInterval * 0.25));
+
+      return Phaser.Math.Between(
+        Math.max(100, baseInterval - jitter),
+        baseInterval + jitter
+      );
+    };
+
     const createBarrels = () => {
       // create a barrel
       let barrel = this.barrels.get(this.goal.x, this.goal.y, 'barrel');
@@ -483,7 +495,7 @@ export default class Demo extends Phaser.Scene {
       });
 
       spawnEvent.reset({
-        delay: Phaser.Math.Between(100, 5000),
+        delay: getNextSpawnDelay(),
         repeat: 1,
         callback: createBarrels
       });
@@ -491,7 +503,7 @@ export default class Demo extends Phaser.Scene {
 
     // spawn barrels
     const spawnEvent = this.time.addEvent({
-      delay: Phaser.Math.Between(100, 5000),
+      delay: getNextSpawnDelay(),
       callback: createBarrels
     });
   }
