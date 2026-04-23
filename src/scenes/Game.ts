@@ -35,6 +35,7 @@ export default class Demo extends Phaser.Scene {
 
     // guard against multiple overlap callbacks triggering multiple restarts
     this.isRestarting = false;
+    this.isLevelComplete = false;
   }
 
   preload() {
@@ -363,8 +364,15 @@ export default class Demo extends Phaser.Scene {
     // overlap checks
     this.physics.add.overlap(
       this.player,
-      [this.fires, this.goal, this.barrels],
+      [this.fires, this.barrels],
       this.restartGame,
+      null,
+      this
+    );
+    this.physics.add.overlap(
+      this.player,
+      this.goal,
+      this.completeLevel,
       null,
       this
     );
@@ -386,6 +394,40 @@ export default class Demo extends Phaser.Scene {
       },
       this
     );
+  }
+
+  completeLevel() {
+    if (this.isRestarting || this.isLevelComplete) return;
+    this.isLevelComplete = true;
+
+    this.player.body.setVelocity(0, 0);
+    this.player.body.allowGravity = false;
+    this.player.body.enable = false;
+    this.player.anims.stop();
+    this.player.setFrame(3);
+
+    this.barrels.children.each((barrel) => {
+      barrel.body.enable = false;
+      barrel.setVelocity(0, 0);
+    });
+    this.fires.children.each((fire) => {
+      fire.body.enable = false;
+    });
+
+    this.goal.setTint(0xfff27a);
+    this.tweens.add({
+      targets: this.goal,
+      scaleX: 1.12,
+      scaleY: 1.12,
+      yoyo: true,
+      repeat: 2,
+      duration: 110
+    });
+    this.cameras.main.flash(220, 240, 255, 180);
+
+    this.time.delayedCall(700, () => {
+      this.restartGame();
+    });
   }
 
   performJump() {
@@ -502,11 +544,11 @@ export default class Demo extends Phaser.Scene {
       return;
     }
 
-    if (Phaser.Input.Keyboard.JustDown(this.keys.pause)) {
+    if (!this.isLevelComplete && Phaser.Input.Keyboard.JustDown(this.keys.pause)) {
       this.togglePause();
     }
 
-    if (this.isPaused) return;
+    if (this.isPaused || this.isLevelComplete) return;
 
     // are we on the ground?
     const onGround =
