@@ -8,6 +8,9 @@ export default class Demo extends Phaser.Scene {
 
   init() {
     this.playerSpeed = 150;
+    this.groundAccel = 22;
+    this.airAccel = 14;
+    this.groundFriction = 26;
     this.jumpSpeed = -600;
     this.jumpHoldBoost = 26;
     this.jumpHoldWindowMs = 110;
@@ -402,6 +405,12 @@ export default class Demo extends Phaser.Scene {
     this.player.setFrame(2);
   }
 
+  approach(current, target, maxDelta) {
+    if (current < target) return Math.min(current + maxDelta, target);
+    if (current > target) return Math.max(current - maxDelta, target);
+    return target;
+  }
+
   setupLevel() {
     this.platforms = this.add.group();
 
@@ -524,42 +533,50 @@ export default class Demo extends Phaser.Scene {
     const stickAxis = Math.abs(stickX) < 0.05 ? 0 : stickX;
 
     const mobileSpeed = this.mobile.enabled ? 1.5 : 1;
+    const maxHorizontalSpeed = this.playerSpeed * mobileSpeed;
 
     const moveLeft = this.cursors.left.isDown || stickAxis < 0;
     const moveRight = this.cursors.right.isDown || stickAxis > 0;
 
     const moveLeftKey = !this.mobile.enabled && this.keys.left.isDown;
     const moveRightKey = !this.mobile.enabled && this.keys.right.isDown;
+    const movingLeft = (moveLeft || moveLeftKey) && !(moveRight || moveRightKey);
+    const movingRight = (moveRight || moveRightKey) && !(moveLeft || moveLeftKey);
+    const hasHorizontalInput = movingLeft || movingRight;
 
-    // movement to the left
-    if ((moveLeft || moveLeftKey) && !(moveRight || moveRightKey)) {
-      this.player.body.setVelocityX(stickAxis !== 0 ? stickAxis * this.playerSpeed * mobileSpeed : -this.playerSpeed);
-
+    let targetVelocityX = 0;
+    if (movingLeft) {
+      targetVelocityX = stickAxis !== 0 ? stickAxis * maxHorizontalSpeed : -this.playerSpeed;
       this.player.flipX = false;
-
-      // play animation if none is playing
-      if (onGround && !this.player.anims.isPlaying)
-        this.player.anims.play('walking');
+    } else if (movingRight) {
+      targetVelocityX = stickAxis !== 0 ? stickAxis * maxHorizontalSpeed : this.playerSpeed;
+      this.player.flipX = true;
     }
 
-    // movement to the right
-    else if ((moveRight || moveRightKey) && !(moveLeft || moveLeftKey)) {
-      this.player.body.setVelocityX(stickAxis !== 0 ? stickAxis * this.playerSpeed * mobileSpeed : this.playerSpeed);
+    targetVelocityX = Phaser.Math.Clamp(
+      targetVelocityX,
+      -maxHorizontalSpeed,
+      maxHorizontalSpeed
+    );
 
-      this.player.flipX = true;
+    const accelPerStep = (onGround ? this.groundAccel : this.airAccel) * (delta / (1000 / 60));
+    const frictionPerStep = (onGround ? this.groundFriction : this.airAccel) * (delta / (1000 / 60));
+    const velocityDelta = hasHorizontalInput ? accelPerStep : frictionPerStep;
+    const nextVelocityX = this.approach(
+      this.player.body.velocity.x,
+      targetVelocityX,
+      velocityDelta
+    );
 
-      // play animation if none is playing
-      if (onGround && !this.player.anims.isPlaying)
-        this.player.anims.play('walking');
-    } else if (!(moveLeft || moveLeftKey) && !(moveRight || moveRightKey)) {
-      // make the player stop
-      this.player.body.setVelocityX(0);
+    this.player.body.setVelocityX(
+      Phaser.Math.Clamp(nextVelocityX, -maxHorizontalSpeed, maxHorizontalSpeed)
+    );
 
-      // stop walking animation
+    if (onGround && Math.abs(this.player.body.velocity.x) > 6) {
+      if (!this.player.anims.isPlaying) this.player.anims.play('walking');
+    } else if (onGround) {
       this.player.anims.stop('walking');
-
-      // set default frame
-      if (onGround) this.player.setFrame(3);
+      this.player.setFrame(3);
     }
 
     const mobileJumpPressed = this.mobile.enabled && this.mobile.jumpQueued;
